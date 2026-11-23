@@ -17,6 +17,9 @@
   var MODEL = DATA.model;
   var state = { tab: 'board', q: '', chain: 'all', category: 'all', band: 'all', sort: 'implied', dir: -1, selected: null };
   var sandbox = { base: MODEL.base_multiple, vel: MODEL.velocity_weight, fresh: 1.0, active: false };
+  // A sandbox slider rebuilds the page, which recreates its own input:
+  // remember which slider moved so render() can hand focus back to it.
+  var refocusId = null;
 
   var usd0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   function fmtUsd(n) {
@@ -307,27 +310,26 @@
     var sb = el('section', { class: 'sandbox' });
     sb.appendChild(el('h2', { text: 'Model sandbox — move a slider, the board recomputes' }));
     sb.appendChild(el('p', { class: 'lede', text: 'The submitted board keeps the model as published below. The sandbox only re-prices the board in your browser, so you can see what the ranking is sensitive to.' }));
-    function slider(label, min, max, step, value, oninput) {
+    function slider(id, label, min, max, step, value, oninput) {
       sb.appendChild(el('label', { text: label }));
       var row = el('div');
-      var input = el('input', { type: 'range', min: String(min), max: String(max), step: String(step), value: String(value) });
+      var input = el('input', { type: 'range', id: id, min: String(min), max: String(max), step: String(step), value: String(value) });
       var out = el('output', { text: value.toFixed(2) });
       input.addEventListener('input', function () {
         var v = parseFloat(input.value);
         out.textContent = v.toFixed(2);
         oninput(v);
         sandbox.active = true;
+        refocusId = id;
         render();
-        var box = document.querySelector('.sandbox input[type="range"]');
-        if (box) box.focus();
       });
       row.appendChild(input);
       row.appendChild(out);
       sb.appendChild(row);
     }
-    slider('Base multiple — TVL × this', 0.05, 0.5, 0.01, sandbox.base, function (v) { sandbox.base = v; });
-    slider('Velocity weight — how much the 7-day move matters', 0, 1.5, 0.05, sandbox.vel, function (v) { sandbox.vel = v; });
-    slider('Freshness boost — how much being newly detected matters', 0, 2, 0.1, sandbox.fresh, function (v) { sandbox.fresh = v; });
+    slider('sb-base', 'Base multiple — TVL × this', 0.05, 0.5, 0.01, sandbox.base, function (v) { sandbox.base = v; });
+    slider('sb-vel', 'Velocity weight — how much the 7-day move matters', 0, 1.5, 0.05, sandbox.vel, function (v) { sandbox.vel = v; });
+    slider('sb-fresh', 'Freshness boost — how much being newly detected matters', 0, 2, 0.1, sandbox.fresh, function (v) { sandbox.fresh = v; });
     var reset = el('button', { class: 'tab', text: 'Reset to the published model' });
     reset.addEventListener('click', function () {
       sandbox.base = MODEL.base_multiple; sandbox.vel = MODEL.velocity_weight; sandbox.fresh = 1.0; sandbox.active = false;
@@ -351,6 +353,13 @@
     model.appendChild(bt);
     model.appendChild(el('p', { class: 'note', text: '“Records no token” is what the snapshot says: a protocol on this board may still have a token its DefiLlama record does not carry. The board separates pre-token protocols from the ' + DATA.live_size + ' live tokens in the Already trading tab, which are priced by the market, not by this model. Data: DefiLlama protocols snapshot, ' + DATA.as_of + '.' }));
     app.appendChild(model);
+
+    // Hand focus back to the sandbox slider that moved, now recreated.
+    if (refocusId) {
+      var moved = document.getElementById(refocusId);
+      refocusId = null;
+      if (moved) moved.focus();
+    }
   }
 
   // Hash states for the three screenshots and for sharing a view.
